@@ -1,0 +1,59 @@
+# CONFIG
+$serverIp = "172.16.0.99"
+$interface = 4  # ← SETAT conform dumpcap -D
+$outDir = "$PSScriptRoot\pcaps"
+
+# Creează folderul pentru capturi
+New-Item -Path $outDir -ItemType Directory -Force | Out-Null
+
+# Funcția care face captura + descărcarea
+function Capture-And-Download {
+    param (
+        [string]$filename,
+        [string]$label
+    )
+
+    $pcapFile = "$outDir\$label`_$filename.pcapng"
+    $url = "http://$serverIp/$label/$filename"
+    $tmpFile = "$env:TEMP\$filename"
+
+    Write-Host "📥 [$label] Downloading $filename and capturing to $pcapFile"
+
+    try {
+        # Pornește captura
+        $dumpcap = Start-Process -FilePath "dumpcap.exe" `
+            -ArgumentList "-i", "$interface", "-w", "$pcapFile" `
+            -WindowStyle Hidden -PassThru
+
+        Start-Sleep -Seconds 1
+
+        # Descarcă fișierul
+        Invoke-WebRequest -Uri $url -OutFile $tmpFile -UseBasicParsing
+
+        Start-Sleep -Seconds 1
+
+        # Oprește captura
+        Stop-Process -Id $dumpcap.Id
+        Write-Host "✅ Capturat: $pcapFile`n"
+    }
+    catch {
+        Write-Warning "⚠️ Eroare la $filename ($label): $_"
+        if ($dumpcap) {
+            Stop-Process -Id $dumpcap.Id -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Citește listele
+$benignList = Get-Content "$PSScriptRoot\benign.txt"
+$maliciousList = Get-Content "$PSScriptRoot\malicious.txt"
+
+# Rulează pe fișierele benigne
+foreach ($f in $benignList) {
+    if ($f.Trim()) { Capture-And-Download -filename $f.Trim() -label "benign" }
+}
+
+# Rulează pe fișierele maligne
+foreach ($f in $maliciousList) {
+    if ($f.Trim()) { Capture-And-Download -filename $f.Trim() -label "malicious" }
+}
