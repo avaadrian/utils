@@ -1,0 +1,22 @@
+#!/bin/bash
+SERVER_IP="192.168.100.10"
+PCAP_DIR="pcaps"
+INTERFACE="eth0"
+mkdir -p "$PCAP_DIR"
+download_and_capture() {
+  local label=$1
+  local list_file="${label}.txt"
+  while read -r filename; do
+    [[ -z "$filename" ]] && continue
+    local pcap_file="$PCAP_DIR/${label}_${filename}.pcap"
+    local url="http://$SERVER_IP/$filename"
+    tcpdump -i "$INTERFACE" -w "$pcap_file" not port 22 &
+    TCPDUMP_PID=$!
+    sleep 1
+    wget -q "$url" -O /dev/null
+    kill "$TCPDUMP_PID" 2>/dev/null
+    wait "$TCPDUMP_PID" 2>/dev/null
+  done < "$list_file"
+}
+download_and_capture "benign"
+download_and_capture "malicious"
