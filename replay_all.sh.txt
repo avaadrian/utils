@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Interfata de retea (modifica daca ai altceva decat eth0)
+INTERFACE="eth0"
+
+# Folderul unde sunt fisierele .pcap
+PCAP_FOLDER="/fss_xe/pcaps"
+
+# Culoare pentru mesaje
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Functie pentru rularea fisierelor dintr-o lista
+replay_pcaps() {
+    local list_file=$1
+    local prefix=$2
+
+    while IFS= read -r line; do
+        # Eliminam spatiile albe, tab-uri, newline extra
+        filename=$(echo "$line" | xargs)
+
+        # Construim calea catre fisierul pcap
+        pcap_file="$PCAP_FOLDER/${prefix}_${filename}.pcap"
+
+        if [[ -f "$pcap_file" ]]; then
+            echo -e "${GREEN}[*] Replaying: $pcap_file${NC}"
+            tcpreplay -i "$INTERFACE" "$pcap_file"
+        else
+            echo -e "${RED}[!] File not found: $pcap_file${NC}"
+        fi
+    done < "$list_file"
+}
+
+echo -e "${YELLOW}=== Replaying benign pcaps ===${NC}"
+replay_pcaps "/fss_xe/benign.txt" "benign"
+
+echo -e "${YELLOW}=== Replaying malware pcaps ===${NC}"
+replay_pcaps "/fss_xe/malware.txt" "malware"
+
+echo -e "${GREEN}=== DONE ===${NC}"
