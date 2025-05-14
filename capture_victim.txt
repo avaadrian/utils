@@ -1,0 +1,51 @@
+#!/bin/bash
+
+SERVER_IP="192.168.111.57"
+INTERFACE="eth0"  # Verifică cu 'ip a'
+PCAP_DIR="pcaps"
+MAX_FILES=10  # <- schimbi aici dacă vrei să testezi mai multe
+
+mkdir -p "$PCAP_DIR"
+
+capture_and_get() {
+    local label=$1
+    local list_file="${label}.txt"
+    local counter=0
+
+    total=$(wc -l < "$list_file")
+
+    while read -r filename; do
+        [[ -z "$filename" ]] && continue
+
+        ((counter++))
+        if (( counter > MAX_FILES )); then
+            echo "Limit reached ($MAX_FILES files). Stopping."
+            break
+        fi
+
+        echo "[$counter/$total] Capturing $label → $filename"
+
+        local pcap_file="$PCAP_DIR/${label}_${filename}.pcap"
+        local url="http://$SERVER_IP/$label/$filename"
+
+        sudo tcpdump -i "$INTERFACE" -w "$pcap_file" &
+        TCPDUMP_PID=$!
+        sleep 2  # important to catch SYN
+
+        wget -q "$url" -O /dev/null
+
+        sleep 1  # important to catch FIN/RST
+        kill "$TCPDUMP_PID"
+        wait "$TCPDUMP_PID" 2>/dev/null
+
+        echo "Saved: $pcap_file"
+    done < "$list_file"
+}
+
+echo "=== Starting benign files ==="
+capture_and_get "benign"
+
+echo "=== Starting malware files ==="
+capture_and_get "malware"
+
+echo "=== Done ==="
