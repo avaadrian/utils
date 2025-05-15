@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Network interface to replay on
+INTERFACE="eth0"
+
+# Folder where pcap files are located (relative path)
+PCAP_FOLDER="./final_pcaps"
+
+# Limit number of files to replay (default: 99999 = no limit)
+MAX_FILES=${1:-99999}
+
+# Colors for console output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to replay pcaps from a given list
+replay_pcaps() {
+    local list_file=$1
+    local prefix=$2
+    local counter=0
+
+    total=$(wc -l < "$list_file")
+
+    while IFS= read -r line; do
+        filename=$(echo "$line" | xargs)
+        pcap_file="$PCAP_FOLDER/${prefix}_${filename}.pcap"
+
+        if [[ -f "$pcap_file" ]]; then
+            ((counter++))
+            echo -e "${GREEN}[*] [$counter/$total] Replaying: $pcap_file${NC}"
+
+            tcpreplay-edit --mtu-trunc -i "$INTERFACE" -t -K "$pcap_file"
+
+            if (( counter >= MAX_FILES )); then
+                echo -e "${YELLOW}[!] Limit of $MAX_FILES files reached. Stopping.${NC}"
+                break
+            fi
+        else
+            echo -e "${RED}[!] File not found: $pcap_file${NC}"
+        fi
+    done < "$list_file"
+}
+
+# Start timer
+start_time=$(date +%s)
+
+echo -e "${YELLOW}=== Replaying benign pcaps ===${NC}"
+replay_pcaps "./benign.txt" "benign"
+
+echo -e "${YELLOW}=== Replaying malware pcaps ===${NC}"
+replay_pcaps "./malware.txt" "malware"
+
+# End timer
+end_time=$(date +%s)
+elapsed=$(( end_time - start_time ))
+
+# Display total runtime
+echo -e "${GREEN}=== DONE in $elapsed seconds ===${NC}"
